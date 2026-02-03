@@ -1,10 +1,17 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-pandas==2.2.2
-joblib==1.4.2
-scikit-learn==1.5.1
+# Serveur FastAPI + Gunicorn
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+gunicorn==21.2.0
+
+# Pandas LIGHT (wheels pré-compilées)
+pandas==2.1.4
 openpyxl==3.1.2
-numpy==1.26.4
-python-multipart==0.0.9
-gunicorn==22.0.0
+
+# Modèle ML (wheels simples)
+joblib==1.3.2
+scikit-learn==1.3.2
+numpy==1.24.3
+
+# Autres
+pydantic==2.5.0
+python-multipart==0.0.6
