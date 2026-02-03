@@ -1,9 +1,17 @@
+# FastAPI + serveur
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 gunicorn==21.2.0
-pandas==2.0.3
-numpy==1.23.5
+
+# ML + modèle (OBLIGATOIRES)
+scikit-learn==1.3.0
 joblib==1.3.2
+numpy==1.23.5
+
+# Pandas + Excel (léger)
+pandas==2.0.3
 openpyxl==3.1.2
+
+# Autres
 pydantic==2.5.0
 python-multipart==0.0.6
