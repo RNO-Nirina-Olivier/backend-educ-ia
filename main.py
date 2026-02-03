@@ -278,6 +278,15 @@ StudentData = None
 # --------------------------------------------------------
 # Endpoint de prédiction
 # --------------------------------------------------------
+@app.get("/health")
+async def health_check():
+    return {"status": "OK", "service": "Prediction API", "version": "1.0.0"}
+
+@app.get("/docs")
+async def docs_redirect():
+    return {"message": "API Prediction - Documentation", "endpoints": ["/health", "/predict"]}
+
+
 @app.post("/predict")
 async def predict(data: Dict[str, Any]):
     """
