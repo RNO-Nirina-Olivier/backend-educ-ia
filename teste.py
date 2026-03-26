@@ -105,7 +105,7 @@ def proba_to_binary_output(
         confidence = p_non_admis
 
     # Générer les recommandations
-    recos = build_recommendations(row, prediction)
+    recos = build_recommendations(row, prediction, p_admis_raw)
 
     return {
         "prediction": prediction,
@@ -118,149 +118,138 @@ def proba_to_binary_output(
         "recommendations": recos,
     }
 
+def get_float(row: pd.Series, col: str):
+    v = row.get(col)
+    return float(v) if pd.notna(v) else None
 
-def build_recommendations(row: pd.Series, prediction: int) -> List[str]:
-    """
-    Génère des conseils pédagogiques.
-    prediction : 0 = non admis, 1 = admis
-    Variables non modifiables :
-      - elev_presco
-      - nbre_elev_SDC
-      - mere_niv_ac
-      - etab_prim_stat
-    Elles servent seulement à comprendre le contexte, pas à proposer de les changer.
-    """
+
+def build_recommendations(row: pd.Series, prediction: int, proba: float) -> List[str]:
     recos: List[str] = []
 
-    # 1) Message global selon le résultat
-    if prediction == 0:
-        recos.append(
-            "Attention, le risque de non-admission est élevé. Voici comment améliorer votre chance de réussite :"
-        )
+    # -----------------------------
+    # 1) Niveau de risque dynamique
+    # -----------------------------
+    if proba >= 0.75:
+        niveau = "faible"
+    elif proba >= 0.5:
+        niveau = "moyen"
     else:
-        recos.append(
-            "Félication, vous êtes sur la bonne voie de la réussite. Veuillez maintenir les bonnes habitudes de travail et le suivi actuel."
-        )
+        niveau = "élevé"
 
-    # 2) imp2 : vérification de devoir
-    if "imp2" in row.index:
-        try:
-            v = float(row["imp2"])
-        except Exception:
-            v = 0.0
-        if v == 0:
-            recos.append(
-                "Les parents doivent vérifier quotidiennement si les élèves ont des devoirs ou non."
-            )
+    # -----------------------------
+    # 2) Message global
+    # -----------------------------
+    messages = {
+        "élevé": "🔴 Risque élevé d’échec. Actions prioritaires recommandées :",
+        "moyen": "🟠 Situation à améliorer. Ajustements nécessaires :",
+        "faible": "🟢 Bonne progression. Conseils pour maintenir le niveau :",
+    }
 
-    # 3) imp3 : supervision de devoir
-    if "imp3" in row.index:
-        try:
-            v = float(row["imp3"])
-        except Exception:
-            v = 0.0
-        if v == 0:
-            recos.append(
-                "Il est recommandé de renforcer la supervision des devoirs à la maison, en accompagnant l’élève lors de la réalisation de ses travaux scolaires."
-            )
+    recos.append(messages[niveau])
+    # -----------------------------
+    # 3) Définition des règles
+    # -----------------------------
+    rules = [
+        {
+            "col": "imp2",
+            "condition": lambda v: v == 0,
+            "messages": {
+                "élevé": "🔴 Vérification quotidienne des devoirs par les parents.",
+                "moyen": "🟠 Vérifier plus régulièrement les devoirs.",
+                "faible": "🟢 Maintenir le suivi des devoirs.",
+            },
+            "seuil": 0.7,
+        },
+        {
+            "col": "imp3",
+            "condition": lambda v: v == 0,
+            "messages": {
+                "élevé": "🔴 Renforcer fortement la supervision des devoirs.",
+                "moyen": "🟠 Améliorer l’accompagnement à la maison.",
+                "faible": "🟢 Continuer l’encadrement actuel.",
+            },
+            "seuil": 0.65,
+        },
+        {
+            "col": "imp5",
+            "condition": lambda v: v == 0,
+            "messages": {
+                "élevé": "🔴 Clarifier urgemment les objectifs éducatifs.",
+                "moyen": "🟠 Discuter des objectifs scolaires avec l’élève.",
+                "faible": "🟢 Maintenir les échanges éducatifs.",
+            },
+            "seuil": 0.6,
+        },
+        {
+            "col": "imp6",
+            "condition": lambda v: v == 0,
+            "messages": {
+                "élevé": "🔴 Augmenter fortement les activités de lecture.",
+                "moyen": "🟠 Encourager davantage la lecture.",
+                "faible": "🟢 Maintenir les habitudes de lecture.",
+            },
+            "seuil": 0.6,
+        },
+        {
+            "col": "imp10",
+            "condition": lambda v: v == 0,
+            "messages": {
+                "élevé": "🔴 Structurer strictement le temps de travail.",
+                "moyen": "🟠 Mieux organiser le temps d’étude.",
+                "faible": "🟢 Continuer l’organisation actuelle.",
+            },
+            "seuil": 0.65,
+        },
+    ]
 
-    # 4) imp5 : attentes et aspirations en matière d’éducation
-    if "imp5" in row.index:
-        try:
-            v = float(row["imp5"])
-        except Exception:
-            v = 0.0
-        if v == 0:
-            recos.append(
-                "Les parents doivent exiger des nobles attentes et aspirations éducatives, en échangeant avec les élèves sur ses objectifs scolaires et futurs."
-            )
+    # -----------------------------
+    # 4) Application des règles
+    # -----------------------------
+    for rule in rules:
+        v = get_float(row, rule["col"])
 
-    # 5) imp6 : lecture avec l’enfant
-    if "imp6" in row.index:
-        try:
-            v = float(row["imp6"])
-        except Exception:
-            v = 0.0
-        if v == 0:
-            recos.append(
-                "Veuillez augmenter les moments de lecture partagée avec l’élève, afin de renforcer sa compréhension et son intérêt pour les apprentissages."
-            )
+        if v is None:
+            continue
 
-    # 6) imp10 : supervision à la maison
-    if "imp10" in row.index:
-        try:
-            v = float(row["imp10"])
-        except Exception:
-            v = 0.0
-        if v == 0:
-            recos.append(
-                "Etablir un emploi pour l'étude à la maison et veuillez à ce que celui-ci soit respecter"  )
+        if rule["condition"](v) and proba < rule["seuil"]:
+            recos.append(rule["messages"][niveau])
 
-    # 7) Rang de table-banc (Ran_TbB) : on agit sur le travail, pas sur la classe elle-même
-    if "Ran_TbB" in row.index:
-        try:
-            rang = float(row["Ran_TbB"])
-        except Exception:
-            rang = 0.0
-        if rang ==2 or rang==3:
-            recos.append(
-                "Le rang de table-banc de l’élève est défavorable : il peut être utile de rapprocher sa place de l’enseignant et d’organiser des séances de révision ciblées avec suivi des devoirs."
-            )
+    # -----------------------------
+    # 5) Variables spécifiques
+    # -----------------------------
+    rang = get_float(row, "Ran_TbB")
+    if rang is not None and rang > 15 and niveau != "faible":
+        recos.append("Réorganiser la position en classe et renforcer le suivi.")
 
-    # 8) Cours de soutien (cour_supl) : modifiable
-    if "cour_supl" in row.index:
-        try:
-            cs = float(row["cour_supl"])
-        except Exception:
-            cs = 0.0
-        if cs == 0:
-            recos.append(
-                "Il est recommandé de proposer ou de renforcer la participation aux cours de soutien afin d’aider l’élève à rattraper ses difficultés."
-            )
-        else:
-            recos.append(
-                "Valoriser les cours de soutien déjà suivis en fixant des objectifs précis pour chaque séance."
-            )
+    cs = get_float(row, "cour_supl")
+    if cs is not None:
+        if cs == 0 and proba < 0.7:
+            recos.append("Encourager fortement les cours de soutien.")
+        elif cs == 1 and niveau == "faible":
+            recos.append("Continuer à exploiter les cours de soutien.")
 
-    # 9) Préscolarisation (elev_presco) : contexte, non modifiable
-    if "elev_presco" in row.index:
-        try:
-            ep = float(row["elev_presco"])
-        except Exception:
-            ep = 0.0
-        if ep == 0:
-            recos.append(
-                "L’élève n’a pas bénéficié de préscolarisation : il est recommandé de prévoir davantage d’activités de base (lecture, écriture, calcul) en classe et à la maison."
-            )
+    # -----------------------------
+    # 6) Variables contextuelles
+    # -----------------------------
+    if str(row.get("mere_niv_ac", "")).upper() in ["0", "AUCUN", "PRIMAIRE"]:
+        if niveau != "faible":
+            recos.append("Adapter la communication avec la famille.")
 
-    # 10) Nombre d'élèves en classe (nbre_elev_SDC) : contexte, non modifiable
-    if "nbre_elev_SDC" in row.index:
-        try:
-            nb = float(row["nbre_elev_SDC"])
-        except Exception:
-            nb = 0.0
-        if nb >= 50:
-            recos.append(
-                "La classe est très chargée : L'enseignant doit favoriser le travail en petits groupes et le tutorat entre élèves pour mieux accompagner l’élève."
-            )
+    if "public" in str(row.get("etab_prim_stat", "")).lower():
+        if niveau == "élevé":
+            recos.append("Mobiliser les ressources scolaires disponibles.")
 
-    # 11) Niveau académique de la mère (mere_niv_ac) : contexte, on adapte l’accompagnement
-    if "mere_niv_ac" in row.index:
-        m = str(row["mere_niv_ac"] or "").upper()
-        if m in ["0", "AUCUN", "PRIMAIRE"]:
-            recos.append(
-                "Compte tenu du niveau académique de la mère, il est recommandé d’adapter la communication avec la famille (explications simples, supports visuels) et de proposer des outils faciles pour suivre les devoirs."
-            )
+    # -----------------------------
+    # 7) Limiter les recommandations
+    # -----------------------------
+    max_recos = {
+        "élevé": 6,
+        "moyen": 4,
+        "faible": 3,
+    }
 
-    # 12) Statut de l’établissement (etab_prim_stat) : contexte, on mobilise les ressources
-    if "etab_prim_stat" in row.index:
-        e = str(row["etab_prim_stat"] or "").lower()
-        if "public" in e:
-            recos.append(
-                "Il est recommandé de mobiliser au maximum les ressources disponibles dans l’établissement (clubs, dispositifs de remédiation, bibliothèque, associations) pour soutenir l’élève."
-            )
+    recos = recos[: max_recos[niveau]]
 
-    recos_uniques = list(dict.fromkeys(recos))
     return recos_uniques
 
 # --------------------------------------------------------
