@@ -139,7 +139,7 @@ def build_recommendations(row: pd.Series, prediction: int) -> List[str]:
         )
     else:
         recos.append(
-            "Félication, vous êtes sur la bonne voie de la réussite. Veuillez maintenir les bonnes habitudes de travail et le suivi actuel."
+            "Félication, vous êtes sur la bonne voie de la réussite. Veuillez maintenir les bonnes habitudes de travail et le suivi actuel.\n Cependant :"
         )
 
     # 2) imp2 : vérification de devoir
